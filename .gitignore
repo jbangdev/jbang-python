@@ -1,0 +1,4 @@
+build
+dist
+jbang.egg-info
+jbang/__pycache__
