@@ -39,6 +39,10 @@ When you run `pip install` - JBang and other dependencies will be installed. Thi
 
 Opening a new terminal or shell may be required to be able to use the `jbang` command from the system `PATH`.
 
+## Improvements ?
+
+This was made as a quick hack to see if it was possible to use JBang from Python based on jbang-npm. If you have any ideas on how to improve this, please open an issue or PR and lets see where this brings us.
+
 ## Similar projects
 
 * [jgo](https://pypi.org/project/jgo/) - allows execution of Maven artifacts by using Maven.
