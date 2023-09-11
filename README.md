@@ -26,7 +26,6 @@ python test.py
 You can easily pass command-line arguments around:
 
 ```python
-python
 import sys
 args = ' '.join(sys.argv1:])
 jbang.exec('com.myco.mylib:RELEASE ' + args)
