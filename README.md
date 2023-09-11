@@ -2,7 +2,7 @@
 
 Install and use [JBang](https://www.jbang.dev) from Python-based projects.
 
-![](python_jbang.png)
+![](https://github.com/jbangdev/jbang-python/blob/main/python_jbang.png?raw=true)
 
 Lets you use your own local scripts, [JBang AppStore](https://jbang.dev/appstore) alias or any network reachable jar or Maven artifact.
 
