@@ -15,4 +15,9 @@ setup(name='jbang',
       author_email='team@jbang.dev',
       license='MIT',
       packages=['jbang'],
-      zip_safe=False)
+      zip_safe=False,
+      entry_points={
+          'console_scripts': [
+              'jbang-python=jbang:main',
+          ],
+      })

@@ -7,27 +7,40 @@ Install and use [JBang](https://www.jbang.dev) from Python-based projects.
 Lets you use your own local scripts, [JBang AppStore](https://jbang.dev/appstore) alias or any network reachable jar or Maven artifact.
 
 ## Usage
-The `jbang.exec()` function accepts a string that will be passed as the command-line arguments to the `jbang` executable.
 
-Given this script `test.py`:
+You can run the package in two ways:
 
-```python
-#! /usr/bin/env python
-import jbang
-jbang.exec('properties@jbangdev')
+### 1. Using the console script
+
+After installation, you can use the `jbang-python` command:
+
+```bash
+jbang-python properties@jbangdev
 ```
 
-Now you can invoke the `test` script from the command-line:
+### 2. Using Python's module runner
 
+You can also run the package directly using Python's module runner:
+
+```bash
+python -m jbang properties@jbangdev
 ```
-python test.py
+
+Or with `pipx`/`uvx`:
+
+```bash
+pipx run -m jbang properties@jbangdev
+# or
+uvx run -m jbang properties@jbangdev
 ```
+
+### Command-line Arguments
 
 You can easily pass command-line arguments around:
 
 ```python
 import sys
-args = ' '.join(sys.argv1:])
+args = ' '.join(sys.argv[1:])
 jbang.exec('com.myco.mylib:RELEASE ' + args)
 ```
 
