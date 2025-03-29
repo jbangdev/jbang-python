@@ -83,10 +83,10 @@ def main():
     """Command-line entry point for jbang-python."""
     
     # Configure logging
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(levelname)s: %(message)s'
-    )
+   # logging.basicConfig(
+   #     level=logging.DEBUG,
+   #     format='%(levelname)s: %(message)s'
+   # )
         
     # Register signal handlers
     signal.signal(signal.SIGINT, handle_signal)

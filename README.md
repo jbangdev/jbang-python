@@ -26,11 +26,9 @@ You can also run the package directly using Python's module runner:
 python -m jbang properties@jbangdev
 ```
 
-Or with `pipx`/`uvx`:
+Or with `uvx`:
 
 ```bash
-pipx run -m jbang properties@jbangdev
-# or
 uvx run -m jbang properties@jbangdev
 ```
 
