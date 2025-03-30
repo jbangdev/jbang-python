@@ -20,4 +20,9 @@ setup(name='jbang',
           'console_scripts': [
               'jbang-python=jbang:main',
           ],
+      },
+      extras_require={
+          'test': [
+              'pytest',
+          ],
       })

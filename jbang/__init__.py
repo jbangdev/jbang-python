@@ -29,20 +29,51 @@ def exec(*args, capture_output=False):
     subprocess_args = {
         "shell": False,  # Don't use shell=True
         "check": False,
-        "stdin": sys.stdin,  # Connect stdin
-        "stdout": sys.stdout,  # Connect stdout
-        "stderr": sys.stderr,  # Connect stderr
         "universal_newlines": True  # Handle text mode properly
     }
+    
+    # Only connect stdin/stdout/stderr if they are available and not being captured
+    try:
+        if hasattr(sys.stdin, 'fileno'):
+            try:
+                sys.stdin.fileno()
+                subprocess_args["stdin"] = sys.stdin
+            except (IOError, OSError):
+                pass
+    except Exception:
+        pass
+
+    try:
+        if hasattr(sys.stdout, 'fileno'):
+            try:
+                sys.stdout.fileno()
+                subprocess_args["stdout"] = sys.stdout
+            except (IOError, OSError):
+                pass
+    except Exception:
+        pass
+
+    try:
+        if hasattr(sys.stderr, 'fileno'):
+            try:
+                sys.stderr.fileno()
+                subprocess_args["stderr"] = sys.stderr
+            except (IOError, OSError):
+                pass
+    except Exception:
+        pass
     
     # Only capture output if explicitly requested
     if capture_output:
         subprocess_args["capture_output"] = True
         subprocess_args["text"] = True
         # Remove the stream connections if capturing output
-        del subprocess_args["stdin"]
-        del subprocess_args["stdout"]
-        del subprocess_args["stderr"]
+        if "stdin" in subprocess_args:
+            del subprocess_args["stdin"]
+        if "stdout" in subprocess_args:
+            del subprocess_args["stdout"]
+        if "stderr" in subprocess_args:
+            del subprocess_args["stderr"]
     
     if jbang_available:
         log.debug(f"using jbang: {arg_line}")
