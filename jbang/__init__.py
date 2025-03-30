@@ -130,7 +130,7 @@ def _exec_library(*args: str, capture_output: bool = False) -> Any:
         
         if process.returncode != 0:
             raise JbangExecutionError(
-                f"Command failed with code {process.returncode}: {arg_line}",
+                f"Command failed with code {process.returncode}: {process.args}",
                 process.returncode
             )
             
@@ -197,7 +197,7 @@ def _exec_cli(*args: str, capture_output: bool = False) -> Any:
             process.wait()
             if process.returncode != 0:
                 raise JbangExecutionError(
-                    f"Command failed with code {process.returncode}: {arg_line}",
+                    f"Command failed with code {process.returncode}: {process.args}",
                     process.returncode
                 )
             return type('CommandResult', (), {'returncode': process.returncode})
