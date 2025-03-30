@@ -28,8 +28,11 @@ def exec(*args, capture_output=False):
     # Default subprocess arguments for interactive mode
     subprocess_args = {
         "shell": False,  # Don't use shell=True
-        "check": False,
-        "universal_newlines": True  # Handle text mode properly
+        "universal_newlines": True,  # Handle text mode properly
+        "stdout": subprocess.PIPE,  # Always capture output
+        "stderr": subprocess.PIPE,  # Always capture stderr
+        "stdin": subprocess.PIPE,   # Always capture stdin
+        "start_new_session": True   # Start in new process group
     }
     
     # Only connect stdin/stdout/stderr if they are available and not being captured
@@ -77,32 +80,74 @@ def exec(*args, capture_output=False):
     
     if jbang_available:
         log.debug(f"using jbang: {arg_line}")
-        cmd_result = subprocess.run(["jbang"] + list(args), **subprocess_args)
+        process = subprocess.Popen(["jbang"] + list(args), **subprocess_args)
+        try:
+            cmd_result = process.wait()
+            # Print output in real-time for Jupyter
+            if hasattr(process, 'stdout') and process.stdout:
+                print(process.stdout.read(), end='', flush=True)
+            if hasattr(process, 'stderr') and process.stderr:
+                print(process.stderr.read(), end='', flush=True, file=sys.stderr)
+        except KeyboardInterrupt:
+            if platform.system() == "Windows":
+                process.terminate()
+            else:
+                process.send_signal(signal.SIGINT)
+            process.wait()
+            raise
     elif curl_available and bash_available:
         log.debug(f"using curl + bash: {arg_line}")
         # Create a copy of subprocess_args without shell parameter for shell commands
         shell_args = {k: v for k, v in subprocess_args.items() if k != "shell"}
-        cmd_result = subprocess.run(f"curl -Ls https://sh.jbang.dev | bash -s - {arg_line}", shell=True, **shell_args)
+        process = subprocess.Popen(f"curl -Ls https://sh.jbang.dev | bash -s - {arg_line}", shell=True, **shell_args)
+        try:
+            cmd_result = process.wait()
+            # Print output in real-time for Jupyter
+            if hasattr(process, 'stdout') and process.stdout:
+                print(process.stdout.read(), end='', flush=True)
+            if hasattr(process, 'stderr') and process.stderr:
+                print(process.stderr.read(), end='', flush=True, file=sys.stderr)
+        except KeyboardInterrupt:
+            if platform.system() == "Windows":
+                process.terminate()
+            else:
+                process.send_signal(signal.SIGINT)
+            process.wait()
+            raise
     elif powershell_available:
         log.debug(f"using powershell: {arg_line}")
         # Create a copy of subprocess_args without shell parameter for shell commands
         shell_args = {k: v for k, v in subprocess_args.items() if k != "shell"}
         subprocess.run('echo iex "& { $(iwr -useb https://ps.jbang.dev) } $args" > %TEMP%/jbang.ps1', shell=True, **shell_args)
-        cmd_result = subprocess.run(["powershell", "-Command", f"%TEMP%/jbang.ps1 {arg_line}"], **subprocess_args)
+        process = subprocess.Popen(["powershell", "-Command", f"%TEMP%/jbang.ps1 {arg_line}"], **subprocess_args)
+        try:
+            cmd_result = process.wait()
+            # Print output in real-time for Jupyter
+            if hasattr(process, 'stdout') and process.stdout:
+                print(process.stdout.read(), end='', flush=True)
+            if hasattr(process, 'stderr') and process.stderr:
+                print(process.stderr.read(), end='', flush=True, file=sys.stderr)
+        except KeyboardInterrupt:
+            if platform.system() == "Windows":
+                process.terminate()
+            else:
+                process.send_signal(signal.SIGINT)
+            process.wait()
+            raise
     else:
         log.debug(f"unable to pre-install jbang: {arg_line}")
         raise JbangExecutionError(f"Unable to pre-install jbang using '{arg_line}'. Please install jbang manually and try again. See https://jbang.dev for more information.", 1)
     
-    if cmd_result.returncode != 0:
+    if cmd_result != 0:
         if capture_output:
-            error_msg = f"The command failed: 'jbang {arg_line}'. Code: {cmd_result.returncode}"
-            if hasattr(cmd_result, 'stderr'):
-                error_msg += f", Stderr: {cmd_result.stderr}"
-            raise JbangExecutionError(error_msg, cmd_result.returncode)
+            error_msg = f"The command failed: 'jbang {arg_line}'. Code: {cmd_result}"
+            if hasattr(process, 'stderr') and process.stderr:
+                error_msg += f", Stderr: {process.stderr.read()}"
+            raise JbangExecutionError(error_msg, cmd_result)
         else:
-            raise JbangExecutionError(f"The command failed: 'jbang {arg_line}'. Code: {cmd_result.returncode}", cmd_result.returncode)
+            raise JbangExecutionError(f"The command failed: 'jbang {arg_line}'. Code: {cmd_result}", cmd_result)
 
-    return cmd_result
+    return type('CommandResult', (), {'returncode': cmd_result})
 
 def handle_signal(signum, frame):
     """Handle common termination signals."""
