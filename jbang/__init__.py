@@ -17,13 +17,13 @@ def exec(*args, capture_output=False):
     arg_line = " ".join(args)
     cmd_result = None
     
-    jbang_available = (subprocess.run(["which", "jbang"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0) or \
-                    (platform.system() == "Windows" and subprocess.run(["which", "./jbang.cmd"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0) or \
-                    subprocess.run(["which", "./jbang"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    jbang_available = (subprocess.run("which jbang", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0) or \
+                    (platform.system() == "Windows" and subprocess.run("which ./jbang.cmd", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0) or \
+                    subprocess.run("which ./jbang", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
 
-    curl_available = subprocess.run(["which", "curl"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
-    bash_available = subprocess.run(["which", "bash"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
-    powershell_available = subprocess.run(["which", "powershell"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    curl_available = subprocess.run("which curl", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    bash_available = subprocess.run("which bash", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    powershell_available = subprocess.run("which powershell", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
     
     # Default subprocess arguments for interactive mode
     subprocess_args = {
@@ -80,10 +80,14 @@ def exec(*args, capture_output=False):
         cmd_result = subprocess.run(["jbang"] + list(args), **subprocess_args)
     elif curl_available and bash_available:
         log.debug(f"using curl + bash: {arg_line}")
-        cmd_result = subprocess.run(["curl", "-Ls", "https://sh.jbang.dev", "|", "bash", "-s", "-"] + list(args), **subprocess_args)
+        # Create a copy of subprocess_args without shell parameter for shell commands
+        shell_args = {k: v for k, v in subprocess_args.items() if k != "shell"}
+        cmd_result = subprocess.run(f"curl -Ls https://sh.jbang.dev | bash -s - {arg_line}", shell=True, **shell_args)
     elif powershell_available:
         log.debug(f"using powershell: {arg_line}")
-        subprocess.run('echo iex "& { $(iwr -useb https://ps.jbang.dev) } $args" > %TEMP%/jbang.ps1', shell=True)
+        # Create a copy of subprocess_args without shell parameter for shell commands
+        shell_args = {k: v for k, v in subprocess_args.items() if k != "shell"}
+        subprocess.run('echo iex "& { $(iwr -useb https://ps.jbang.dev) } $args" > %TEMP%/jbang.ps1', shell=True, **shell_args)
         cmd_result = subprocess.run(["powershell", "-Command", f"%TEMP%/jbang.ps1 {arg_line}"], **subprocess_args)
     else:
         log.debug(f"unable to pre-install jbang: {arg_line}")
