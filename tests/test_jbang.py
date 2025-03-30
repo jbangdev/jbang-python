@@ -26,3 +26,12 @@ def test_error_handling():
     with pytest.raises(Exception):
         jbang.exec('nonexistent-script-name')
     print("✓ Error handling works") 
+
+def test_multiple_arguments():
+    """Test multiple arguments."""
+    print("\nTesting multiple arguments...")
+    out = jbang.exec('-D="funky bear" properties@jbangdev')
+    assert out.returncode == 0
+    assert 'funky bear' in out.stdout
+ 
+    print("✓ Error handling works") 

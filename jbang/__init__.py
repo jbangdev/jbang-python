@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 import os
 import platform
@@ -216,75 +217,10 @@ def _exec_cli(*args: str, capture_output: bool = False) -> Any:
         if 'process' in globals():
             del globals()['process']
 
-def exec(*args: str, capture_output: bool = False) -> Any:
-    """Execute jbang command for library usage."""
-    arg_line = " ".join(args)
-    jbang_path = _get_jbang_path()
-    installer_cmd = _get_installer_command()
-    
-    if not jbang_path and not installer_cmd:
-        raise JbangExecutionError(
-            f"Unable to pre-install jbang: {arg_line}. Please install jbang manually.",
-            1
-        )
-
-    subprocess_args = {
-        "shell": False,
-        "universal_newlines": True,
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.PIPE,
-        "stdin": subprocess.PIPE
-    }
-    
-    try:
-        if jbang_path:
-            process = subprocess.Popen(
-                [jbang_path] + list(args),
-                **subprocess_args
-            )
-        else:
-            if "curl" in installer_cmd:
-                process = subprocess.Popen(
-                    f"{installer_cmd} {arg_line}",
-                    shell=True,
-                    **{k: v for k, v in subprocess_args.items() if k != "shell"}
-                )
-            else:
-                # PowerShell case
-                temp_script = os.path.join(os.environ.get('TEMP', '/tmp'), 'jbang.ps1')
-                with open(temp_script, 'w') as f:
-                    f.write(installer_cmd)
-                process = subprocess.Popen(
-                    ["powershell", "-Command", f"{temp_script} {arg_line}"],
-                    **subprocess_args
-                )
-
-        stdout, stderr = process.communicate()
-        
-        if process.returncode != 0:
-            raise JbangExecutionError(
-                f"Command failed with code {process.returncode}: {arg_line}",
-                process.returncode
-            )
-            
-        result = type('CommandResult', (), {
-            'returncode': process.returncode,
-            'stdout': stdout,
-            'stderr': stderr
-        })
-        
-        if not capture_output:
-            if stdout:
-                print(stdout, end='', flush=True)
-            if stderr:
-                print(stderr, end='', flush=True, file=sys.stderr)
-                
-        return result
-        
-    except Exception as e:
-        if isinstance(e, JbangExecutionError):
-            raise
-        raise JbangExecutionError(str(e), 1)
+def exec(arg: str, capture_output: bool = False) -> Any:
+    """Execute jbang command simulating shell."""
+    args = shlex.split(arg)
+    return _exec_library(*args, capture_output=capture_output)
 
 def main():
     """Command-line entry point for jbang-python."""

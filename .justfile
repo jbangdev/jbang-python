@@ -3,7 +3,7 @@ default:
 
 test:
     source venv/bin/activate
-    pip3 install -e .
+    #pip3 install -e .
     pip install -e ".[test]"
     python -m pytest
 
