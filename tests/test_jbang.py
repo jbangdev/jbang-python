@@ -23,8 +23,8 @@ def test_catalog_script():
 def test_error_handling():
     """Test error handling."""
     print("\nTesting error handling...")
-    with pytest.raises(Exception):
-        jbang.exec('nonexistent-script-name')
+    out = jbang.exec('nonexistent-script-name')
+    assert out.returncode == 2
     print("✓ Error handling works") 
 
 def test_multiple_arguments():
