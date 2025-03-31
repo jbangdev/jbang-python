@@ -5,7 +5,7 @@ test:
     source venv/bin/activate
     #pip3 install -e .
     pip install -e ".[test]"
-    python -m pytest
+    python -m pytest  -o log_cli_level=DEBUG # -o log_cli=true
 
 release:
     source venv/bin/activate

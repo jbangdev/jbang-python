@@ -28,4 +28,4 @@ jobs:
         pip install -e .
     - name: Run tests
       run: |
-        pytest --cov=jbang tests/ 
+        pytest --cov=jbang tests/ -o log_cli_level=DEBUG -o log_cli=true

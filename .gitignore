@@ -3,3 +3,4 @@ dist
 jbang.egg-info
 jbang/__pycache__
 __pycache__
+.coverage
