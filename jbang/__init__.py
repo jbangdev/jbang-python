@@ -1,277 +1,146 @@
-import shlex
-import subprocess
+import logging
 import os
 import platform
-import logging
-import sys
+import shutil
 import signal
-from typing import Optional, Dict, Any
+import subprocess
+import sys
+from typing import Any, Dict, Optional
+
+# Configure logging based on environment variable
+debug_enabled = 'jbang' in os.environ.get('DEBUG', '')
+if debug_enabled:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s %(levelname)s %(name)s: %(message)s'
+    )
+
 
 log = logging.getLogger(__name__)
 
-class JbangExecutionError(Exception):
-    """Custom exception to capture Jbang execution errors with exit code."""
-    def __init__(self, message, exit_code):
-        super().__init__(message)
-        self.exit_code = exit_code
-
-def _get_jbang_path() -> Optional[str]:
-    """Get the path to jbang executable."""
-    log.debug("Searching for jbang executable...")
-    for cmd in ['jbang', './jbang.cmd' if platform.system() == 'Windows' else None, './jbang']:
-        if cmd:
-            log.debug(f"Checking for command: {cmd}")
-            result = subprocess.run(f"which {cmd}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if result.returncode == 0:
-                log.debug(f"Found jbang at: " + result.stdout.decode('utf-8'))
-                return cmd
-    log.warning("No jbang executable found in PATH")
-    return None
-
-def _get_installer_command() -> Optional[str]:
-    """Get the appropriate installer command based on available tools."""
-    log.debug("Checking for available installer tools...")
-    if subprocess.run("which curl", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0 and \
-       subprocess.run("which bash", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0:
-        log.debug("Will use curl/bash installer if needed")
-        return "curl -Ls https://sh.jbang.dev | bash -s -"
-    elif subprocess.run("which powershell", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0:
-        log.debug("Will use PowerShell installer if needed")
-        return 'iex "& { $(iwr -useb https://ps.jbang.dev) } $args"'
-    log.warning("No suitable installer found")
-    return None
-
-def _setup_subprocess_args(capture_output: bool = False) -> Dict[str, Any]:
-    """Setup subprocess arguments with proper terminal interaction."""
-    log.debug(f"Setting up subprocess arguments (capture_output={capture_output})")
-    args = {
-        "shell": False,
-        "universal_newlines": True,
-        "start_new_session": False,
-        "preexec_fn": os.setpgrp if platform.system() != "Windows" else None
-    }
+def quote(xs):
+    def quote_string(s):
+        if s == '':
+            return "''"
+        if isinstance(s, dict) and 'op' in s:
+            return ''.join(['\\' + char for char in s['op']])
+        
+        if any(char in s for char in ['"', ' ']) and "'" not in s:
+            return "'" + s.replace("'", "\\'").replace("\\", "\\\\") + "'"
+        
+        if any(char in s for char in ['"', "'", ' ']):
+            return '"' + s.replace('"', '\\"').replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`').replace('!', '\\!') + '"'
+        
+        return ''.join(['\\' + char if char in '#!"$&\'()*,:;<=>?[\\]^`{|}' else char for char in s])
     
-    if capture_output:
-        log.debug("Configuring for captured output")
-        args.update({
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.PIPE,
-            "stdin": subprocess.PIPE
-        })
+    return ' '.join(map(quote_string, xs))
+
+def _getCommandLine(args: list) -> Optional[str]:
+    """Get the jbang command line with arguments, using no-install option if needed."""
+    log.debug("Searching for jbang executable...")
+    
+    argLine = quote(args)
+    # Try different possible jbang locations
+    path = None
+    for cmd in ['jbang', 
+                './jbang.cmd' if platform.system() == 'Windows' else None, 
+                os.path.expanduser('~/.jbang/bin/jbang')]:
+        if cmd:
+            if shutil.which(cmd):
+                path = cmd
+                break
+    
+    if path:
+        log.debug(f"found existing jbang installation at: {path}")
+        return ' '.join([path, argLine])
+    
+    # Try no-install options
+    if shutil.which('curl') and shutil.which('bash'):
+        log.debug("running jbang using curl and bash")
+        return " ".join(["curl", "-Ls", "https://sh.jbang.dev", "|", "bash", "-s", "-", argLine])
+    elif shutil.which('powershell'):
+        log.debug("running jbang using PowerShell")
+        return " ".join(["powershell", "-Command", "iex \"& { $(iwr -useb https://ps.jbang.dev) } $argLine\""])
     else:
-        # Try to connect to actual terminal if available
-        try:
-            if hasattr(sys.stdin, 'fileno'):
-                args["stdin"] = sys.stdin
-        except (IOError, OSError):
-            args["stdin"] = subprocess.PIPE
+        log.debug("no jbang installation found")
+        return None
 
-        try:
-            if hasattr(sys.stdout, 'fileno'):
-                args["stdout"] = sys.stdout
-        except (IOError, OSError):
-            args["stdout"] = subprocess.PIPE
+def exec(*args: str) -> Any:
+    log.debug(f"try to execute async command: {args}")
+    
+    cmdLine = _getCommandLine(list(args))
+  
+    if cmdLine:
+        result = subprocess.run(
+                cmdLine,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        return type('CommandResult', (), {
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'exitCode': result.returncode
+            })
+    else:
+        print("Could not locate a way to run jbang. Try install jbang manually and try again.")
+        raise Exception(
+            "Could not locate a way to run jbang. Try install jbang manually and try again.",
+            2
+        )
 
-        try:
-            if hasattr(sys.stderr, 'fileno'):
-                args["stderr"] = sys.stderr
-        except (IOError, OSError):
-            args["stderr"] = subprocess.PIPE
-
-    return args
+def spawnSync(*args: str) -> Any:
+    log.debug(f"try to execute sync command: {args}")
+    
+    cmdLine = _getCommandLine(list(args))
+  
+    if cmdLine:
+        result = subprocess.run(
+                cmdLine,
+                shell=True,
+                stdin=sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                check=True
+            )
+        return type('CommandResult', (), {
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'exitCode': result.returncode
+            })
+    else:
+        print("Could not locate a way to run jbang. Try install jbang manually and try again.")
+        raise Exception(
+            "Could not locate a way to run jbang. Try install jbang manually and try again.",
+            2
+        )
 
 def _handle_signal(signum, frame):
     """Handle signals and propagate them to child processes."""
-    log.debug(f"Received signal {signum}")
     if hasattr(frame, 'f_globals') and 'process' in frame.f_globals:
         process = frame.f_globals['process']
-        if process and process.poll() is None:
-            log.debug(f"Propagating signal {signum} to process group {os.getpgid(process.pid)}")
+        if process and process.poll() is None:  # Process is still running
             if platform.system() == "Windows":
                 process.terminate()
             else:
+                # Send signal to the entire process group
                 os.killpg(os.getpgid(process.pid), signum)
             process.wait()
     sys.exit(0)
 
-def _exec_library(*args: str, capture_output: bool = False) -> Any:
-    """Execute jbang command for library usage."""
-    arg_line = " ".join(args)
-    log.debug(f"Executing library command: {arg_line}")
-    
-    jbang_path = _get_jbang_path()
-    installer_cmd = _get_installer_command()
-    
-    if not jbang_path and not installer_cmd:
-        log.error("No jbang executable or installer found")
-        raise JbangExecutionError(
-            f"Unable to pre-install jbang: {arg_line}. Please install jbang manually.",
-            1
-        )
-
-    subprocess_args = {
-        "shell": False,
-        "universal_newlines": True,
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.PIPE,
-        "stdin": subprocess.PIPE
-    }
-    
-    try:
-        if jbang_path:
-            log.debug(f"Using jbang executable: {jbang_path}")
-            process = subprocess.Popen(
-                [jbang_path] + list(args),
-                **subprocess_args
-            )
-        else:
-            log.debug(f"Using installer command: {installer_cmd}")
-            if "curl" in installer_cmd:
-                process = subprocess.Popen(
-                    f"{installer_cmd} {arg_line}",
-                    shell=True,
-                    **{k: v for k, v in subprocess_args.items() if k != "shell"}
-                )
-            else:
-                temp_script = os.path.join(os.environ.get('TEMP', '/tmp'), 'jbang.ps1')
-                log.debug(f"Creating temporary PowerShell script: {temp_script}")
-                with open(temp_script, 'w') as f:
-                    f.write(installer_cmd)
-                process = subprocess.Popen(
-                    ["powershell", "-Command", f"{temp_script} {arg_line}"],
-                    **subprocess_args
-                )
-
-        log.debug(f"Process started with PID: {process.pid}")
-        stdout, stderr = process.communicate()
-        
-        if process.returncode != 0:
-            log.error(f"Command failed with code {process.returncode}")
-            log.error(f"stderr: {stderr}")
-            raise JbangExecutionError(
-                f"Command failed with code {process.returncode}: {process.args}",
-                process.returncode
-            )
-            
-        result = type('CommandResult', (), {
-            'returncode': process.returncode,
-            'stdout': stdout,
-            'stderr': stderr
-        })
-        
-        if not capture_output:
-            if stdout:
-                print(stdout, end='', flush=True)
-            if stderr:
-                print(stderr, end='', flush=True, file=sys.stderr)
-                
-        return result
-        
-    except Exception as e:
-        log.debug(f"Exception during execution: {str(e)}", exc_info=True)
-        if isinstance(e, JbangExecutionError):
-            raise
-        raise JbangExecutionError(str(e), 1)
-
-def _exec_cli(*args: str, capture_output: bool = False) -> Any:
-    """Execute jbang command for CLI usage."""
-    arg_line = " ".join(args)
-    log.debug(f"Executing CLI command: {arg_line}")
-    
-    jbang_path = _get_jbang_path()
-    installer_cmd = _get_installer_command()
-    
-    if not jbang_path and not installer_cmd:
-        log.warn("No jbang executable or installer found")
-        raise JbangExecutionError(
-            f"Unable to pre-install jbang: {arg_line}. Please install jbang manually.",
-            1
-        )
-
-    subprocess_args = _setup_subprocess_args(capture_output)
-    
-    try:
-        if jbang_path:
-            log.debug(f"Using jbang executable: {jbang_path}")
-            process = subprocess.Popen(
-                [jbang_path] + list(args),
-                **subprocess_args
-            )
-        else:
-            log.debug(f"Using installer command: {installer_cmd}")
-            if "curl" in installer_cmd:
-                process = subprocess.Popen(
-                    f"{installer_cmd} {arg_line}",
-                    shell=True,
-                    **{k: v for k, v in subprocess_args.items() if k != "shell"}
-                )
-            else:
-                temp_script = os.path.join(os.environ.get('TEMP', '/tmp'), 'jbang.ps1')
-                log.debug(f"Creating temporary PowerShell script: {temp_script}")
-                with open(temp_script, 'w') as f:
-                    f.write(installer_cmd)
-                process = subprocess.Popen(
-                    ["powershell", "-Command", f"{temp_script} {arg_line}"],
-                    **subprocess_args
-                )
-
-        log.debug(f"Process started with PID: {process.pid}")
-        globals()['process'] = process
-
-        try:
-            process.wait()
-            if process.returncode != 0:
-                log.warn(f"Command failed with code {process.returncode}")
-                raise JbangExecutionError(
-                    f"Command failed with code {process.returncode}: {process.args}",
-                    process.returncode
-                )
-            return type('CommandResult', (), {'returncode': process.returncode})
-        except KeyboardInterrupt:
-            log.debug("Received keyboard interrupt")
-            if platform.system() == "Windows":
-                process.terminate()
-            else:
-                os.killpg(os.getpgid(process.pid), signal.SIGINT)
-            process.wait()
-            raise
-    except Exception as e:
-        log.warn(f"Exception during execution: {str(e)}", exc_info=True)
-        if isinstance(e, JbangExecutionError):
-            raise
-        raise JbangExecutionError(str(e), 1)
-    finally:
-        if 'process' in globals():
-            del globals()['process']
-
-def exec(arg: str, capture_output: bool = False) -> Any:
-    """Execute jbang command simulating shell."""
-    log.debug(f"Executing command: {arg}")
-    args = shlex.split(arg)
-    return _exec_library(*args, capture_output=capture_output)
-
 def main():
     """Command-line entry point for jbang-python."""
     log.debug("Starting jbang-python CLI")
-    
-    # Register signal handlers
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
-    signal.signal(signal.SIGHUP, _handle_signal)
-    signal.signal(signal.SIGQUIT, _handle_signal)
-    log.debug("Signal handlers registered")
 
     try:
-        result = _exec_cli(*sys.argv[1:], capture_output=False)
-        sys.exit(result.returncode)
+        result = spawnSync(*sys.argv[1:])
+        sys.exit(result.exitCode)
     except KeyboardInterrupt:
-        log.debug("Received keyboard interrupt, exiting")
-        sys.exit(0)
-    except JbangExecutionError as e:
-        log.debug(f"Jbang execution error: {str(e)}")
-        sys.exit(e.exit_code)
+        log.debug("Keyboard interrupt")
+        sys.exit(130)
     except Exception as e:
-        log.debug(f"Unexpected error: {str(e)}", exc_info=True)
+        log.error(f"Unexpected error: {str(e)}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":
