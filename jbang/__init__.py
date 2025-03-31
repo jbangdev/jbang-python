@@ -35,11 +35,11 @@ def quote(xs):
     
     return ' '.join(map(quote_string, xs))
 
-def _getCommandLine(args: list) -> Optional[str]:
+def _getCommandLine(args) -> Optional[str]:
     """Get the jbang command line with arguments, using no-install option if needed."""
     log.debug("Searching for jbang executable...")
     
-    argLine = quote(args)
+    argLine = args
     # Try different possible jbang locations
     path = None
     for cmd in ['jbang', 
@@ -93,7 +93,7 @@ def exec(*args: str) -> Any:
 def spawnSync(*args: str) -> Any:
     log.debug(f"try to execute sync command: {args}")
     
-    cmdLine = _getCommandLine(list(args))
+    cmdLine = _getCommandLine(args)
   
     if cmdLine:
         result = subprocess.run(
