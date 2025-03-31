@@ -23,7 +23,7 @@ def _get_jbang_path() -> Optional[str]:
             log.debug(f"Checking for command: {cmd}")
             result = subprocess.run(f"which {cmd}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if result.returncode == 0:
-                log.debug(f"Found jbang at: {cmd}")
+                log.debug(f"Found jbang at: " + result.stdout.decode('utf-8'))
                 return cmd
     log.warning("No jbang executable found in PATH")
     return None
