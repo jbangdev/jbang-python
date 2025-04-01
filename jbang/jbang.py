@@ -4,7 +4,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, List, Optional, Union
 
 # Configure logging based on environment variable
 debug_enabled = 'jbang' in os.environ.get('DEBUG', '')
@@ -16,20 +16,29 @@ if debug_enabled:
 
 log = logging.getLogger(__name__)
 
-def quote_string(s):
-        if s == '':
-            return "''"
-        
-        if any(char in s for char in ['"', ' ']) and "'" not in s:
-            return "'" + s.replace("'", "\\'").replace("\\", "\\\\") + "'"
-        
-        if any(char in s for char in ['"', "'", ' ']):
-            return '"' + s.replace('"', '\\"').replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`').replace('!', '\\!') + '"'
-        
-        return ''.join(['\\' + char if char in '#!"$&\'()*,:;<=>?[\\]^`{|}' else char for char in s])
+## used shell quote before but it is
+## not working for Windows so ported from jbang 
+
+def escapeCmdArgument(arg: str) -> str:
+    cmdSafeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,_+=:;@()-\\"
+    if not all(c in cmdSafeChars for c in arg):
+        # Windows quoting is just weird
+        arg = ''.join('^' + c if c in '()!^<>&|% ' else c for c in arg)
+        arg = arg.replace('"', '\\"')
+        arg = '^"' + arg + '^"'
+    return arg
+
+def escapeBashArgument(arg: str) -> str:
+    shellSafeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+=:@%/-"
+    if not all(c in shellSafeChars for c in arg):
+        arg = arg.replace("'", "'\\''")
+        arg = "'" + arg + "'"
+    return arg
     
 def quote(xs):
-    return ' '.join(map(quote_string, xs))
+    if platform.system() == 'Windows':
+        return ' '.join(escapeCmdArgument(s) for s in xs)
+    return ' '.join(escapeBashArgument(s) for s in xs)
     
 
 def _getCommandLine(args: Union[str, List[str]]) -> Optional[str]:
@@ -48,9 +57,9 @@ def _getCommandLine(args: Union[str, List[str]]) -> Optional[str]:
     # Try different possible jbang locations
     path = None
     for cmd in ['./jbang.cmd' if platform.system() == 'Windows' else None,
-                'jbang', 
-                os.path.expanduser('~\.jbang\bin\jbang.cmd') if platform.system() == 'Windows' else None,
-                os.path.expanduser('~/.jbang/bin/jbang')]:
+                'jbang',
+                os.path.join(os.path.expanduser('~'), '.jbang', 'bin', 'jbang.cmd') if platform.system() == 'Windows' else None,
+                os.path.join(os.path.expanduser('~'), '.jbang', 'bin', 'jbang')]:
         if cmd:
             if shutil.which(cmd):
                 path = cmd

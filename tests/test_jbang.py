@@ -1,5 +1,9 @@
+import sys
+
 import pytest
+
 import jbang
+
 
 def test_version_command():
     """Test version command."""
@@ -31,44 +35,59 @@ def test_error_handling():
 def test_multiple_argument_as_string():
     """Test multiple arguments as string."""
     print("\nTesting multiple arguments...")
-    out = jbang.exec('-Dx="funky bear" properties@jbangdev')
+    out = jbang.exec('-Dx="funky string" properties@jbangdev')
     assert out.exitCode == 0
-    assert 'funky bear' in out.stdout
+    assert 'funky string' in out.stdout
  
 def test_multiple_argument_as_list():
     """Test multiple arguments as list."""
     print("\nTesting multiple arguments...")
-    out = jbang.exec(['-Dx=funky bear', 'properties@jbangdev'])
+    out = jbang.exec(['-Dx=funky list', 'properties@jbangdev'])
     assert out.exitCode == 0
-    assert 'funky bear' in out.stdout
- 
-def test_quote_empty_string():
-    """Test quoting empty string."""
-    assert jbang.quote(['']) == "''"
+    assert 'funky list' in out.stdout
 
-def test_quote_simple_string():
-    """Test quoting simple string without special chars."""
-    assert jbang.quote(['hello']) == 'hello'
+def test_java_version_specification():
+    """Test Java version specification."""
+    print("\nTesting Java version specification...")
+    out = jbang.exec(['--java', '21+', 'properties@jbangdev', 'java.version'])
+    assert out.exitCode == 0
+    assert any(char.isdigit() for char in out.stdout), "Expected version number in output"
 
-def test_quote_string_with_spaces():
-    """Test quoting string containing spaces."""
-    assert jbang.quote(['hello world']) == "'hello world'"
+def test_invalid_java_version():
+    """Test invalid Java version handling."""
+    print("\nTesting invalid Java version handling...")
+    out = jbang.exec('--java invalid properties@jbangdev java.version')
+    assert 'Invalid version' in out.stderr
 
-def test_quote_string_with_double_quotes():
-    """Test quoting string containing double quotes."""
-    assert jbang.quote(['hello "world"']) == "'hello \"world\"'"
+@pytest.mark.skipif(sys.platform == 'win32', reason="Quote tests behave differently on Windows")
+class TestQuoting:
+    def test_quote_empty_string(self):
+        """Test quoting empty string."""
+        assert jbang.quote(['']) == ""
 
-def test_quote_string_with_single_quotes():
-    """Test quoting string containing single quotes."""
-    assert jbang.quote(['hello\'world']) == '"hello\'world"'
+    def test_quote_simple_string(self):
+        """Test quoting simple string without special chars."""
+        assert jbang.quote(['hello']) == 'hello'
 
-def test_quote_string_with_special_chars():
-    """Test quoting string containing special characters."""
-    assert jbang.quote(['hello$world']) == 'hello\\$world'
-    assert jbang.quote(['hello!world']) == 'hello\\!world'
-    assert jbang.quote(['hello#world']) == 'hello\\#world'
+    def test_quote_string_with_spaces(self):
+        """Test quoting string containing spaces."""
+        assert jbang.quote(['hello world']) == "'hello world'"
 
-def test_quote_multiple_strings():
-    """Test quoting multiple strings."""
-    assert jbang.quote(['hello world']) == "'hello world'"
-    assert jbang.quote(["hello 'big world'"]) == '"hello \'big world\'"'
+    def test_quote_string_with_double_quotes(self):
+        """Test quoting string containing double quotes."""
+        assert jbang.quote(['hello "world"']) == "'hello \"world\"'"
+
+    def test_quote_string_with_single_quotes(self):
+        """Test quoting string containing single quotes."""
+        assert jbang.quote(["hello'world"]) == "'hello'\\''world'"
+
+    def test_quote_string_with_special_chars(self):
+        """Test quoting string containing special characters."""
+        assert jbang.quote(['hello$world']) == "'hello$world'"
+        assert jbang.quote(['hello!world']) == "'hello!world'"
+        assert jbang.quote(['hello#world']) == "'hello#world'"
+
+    def test_quote_multiple_strings(self):
+        """Test quoting multiple strings."""
+        assert jbang.quote(['hello world']) == "'hello world'"
+        assert jbang.quote(["hello 'big world'"]) == "'hello '\\''big world'\\'''"
