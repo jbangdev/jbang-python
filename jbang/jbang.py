@@ -95,11 +95,13 @@ def exec(args: Union[str, List[str]]) -> Any:
                 text=True,
                 check=False
             )
-        return type('CommandResult', (), {
+        result = type('CommandResult', (), {
                 'stdout': result.stdout,
                 'stderr': result.stderr,
                 'exitCode': result.returncode
             })
+        log.debug(f"result: {result.__dict__}")
+        return result
     else:
         print("Could not locate a way to run jbang. Try install jbang manually and try again.")
         raise Exception(
@@ -122,30 +124,19 @@ def spawnSync(args: Union[str, List[str]]) -> Any:
                 stderr=sys.stderr,
                 check=False
             )
-        return type('CommandResult', (), {
+        tuple = type('CommandResult', (), {
                 'stdout': result.stdout,
                 'stderr': result.stderr,
                 'exitCode': result.returncode
             })
+        log.debug(f"result: {tuple.__dict__}")
+        return tuple
     else:
         print("Could not locate a way to run jbang. Try install jbang manually and try again.")
         raise Exception(
             "Could not locate a way to run jbang. Try install jbang manually and try again.",
             2
         )
-
-def _handle_signal(signum, frame):
-    """Handle signals and propagate them to child processes."""
-    if hasattr(frame, 'f_globals') and 'process' in frame.f_globals:
-        process = frame.f_globals['process']
-        if process and process.poll() is None:  # Process is still running
-            if platform.system() == "Windows":
-                process.terminate()
-            else:
-                # Send signal to the entire process group
-                os.killpg(os.getpgid(process.pid), signum)
-            process.wait()
-    sys.exit(0)
 
 def main():
     """Command-line entry point for jbang-python."""
