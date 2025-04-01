@@ -28,11 +28,47 @@ def test_error_handling():
     assert out.exitCode == 2
     print("✓ Error handling works") 
 
-def test_multiple_arguments():
-    """Test multiple arguments."""
+def test_multiple_argument_as_string():
+    """Test multiple arguments as string."""
     print("\nTesting multiple arguments...")
     out = jbang.exec('-Dx="funky bear" properties@jbangdev')
-    assert out.returncode == 0
+    assert out.exitCode == 0
     assert 'funky bear' in out.stdout
  
-    print("✓ Error handling works") 
+def test_multiple_argument_as_list():
+    """Test multiple arguments as list."""
+    print("\nTesting multiple arguments...")
+    out = jbang.exec(['-Dx=funky bear', 'properties@jbangdev'])
+    assert out.exitCode == 0
+    assert 'funky bear' in out.stdout
+ 
+def test_quote_empty_string():
+    """Test quoting empty string."""
+    assert jbang.quote(['']) == "''"
+
+def test_quote_simple_string():
+    """Test quoting simple string without special chars."""
+    assert jbang.quote(['hello']) == 'hello'
+
+def test_quote_string_with_spaces():
+    """Test quoting string containing spaces."""
+    assert jbang.quote(['hello world']) == "'hello world'"
+
+def test_quote_string_with_double_quotes():
+    """Test quoting string containing double quotes."""
+    assert jbang.quote(['hello "world"']) == "'hello \"world\"'"
+
+def test_quote_string_with_single_quotes():
+    """Test quoting string containing single quotes."""
+    assert jbang.quote(['hello\'world']) == '"hello\'world"'
+
+def test_quote_string_with_special_chars():
+    """Test quoting string containing special characters."""
+    assert jbang.quote(['hello$world']) == 'hello\\$world'
+    assert jbang.quote(['hello!world']) == 'hello\\!world'
+    assert jbang.quote(['hello#world']) == 'hello\\#world'
+
+def test_quote_multiple_strings():
+    """Test quoting multiple strings."""
+    assert jbang.quote(['hello world']) == "'hello world'"
+    assert jbang.quote(["hello 'big world'"]) == '"hello \'big world\'"'
