@@ -49,7 +49,7 @@ def _getCommandLine(args: Union[str, List[str]]) -> Optional[str]:
     path = None
     for cmd in ['./jbang.cmd' if platform.system() == 'Windows' else None,
                 'jbang', 
-                os.path.expanduser('~/.jbang/bin/jbang.cmd') if platform.system() == 'Windows' else None,
+                os.path.expanduser('~\.jbang\bin\jbang.cmd') if platform.system() == 'Windows' else None,
                 os.path.expanduser('~/.jbang/bin/jbang')]:
         if cmd:
             if shutil.which(cmd):
