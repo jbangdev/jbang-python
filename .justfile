@@ -7,6 +7,6 @@ test:
     PATH=$(echo $PATH | tr ':' '\n' | grep -v "\.jbang/bin" | tr '\n' ':' | sed 's/:$//') .venv/bin/python -m pytest  -o log_cli_level=DEBUG  -o log_cli=true
 
 release:
-    source venv/bin/activate
+    source .venv/bin/activate
     uv pip install setuptools
     gh release create `python3 setup.py --version` --generate-notes
