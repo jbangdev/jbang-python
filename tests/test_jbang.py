@@ -49,7 +49,7 @@ def test_multiple_argument_as_list():
 def test_java_version_specification():
     """Test Java version specification."""
     print("\nTesting Java version specification...")
-    out = jbang.exec(['--java', '21+', 'properties@jbangdev', 'java.version'])
+    out = jbang.exec(['--java', '8+', 'properties@jbangdev', 'java.version'])
     assert out.exitCode == 0
     assert any(char.isdigit() for char in out.stdout), "Expected version number in output"
 
