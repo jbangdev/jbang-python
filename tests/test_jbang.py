@@ -3,6 +3,7 @@ import sys
 import pytest
 
 import jbang
+from jbang.jbang import CommandResult
 
 
 def test_version_command():
@@ -91,3 +92,110 @@ class TestQuoting:
         """Test quoting multiple strings."""
         assert jbang.quote(['hello world']) == "'hello world'"
         assert jbang.quote(["hello 'big world'"]) == "'hello '\\''big world'\\'''"
+
+
+class TestCommandResult:
+    """Test CommandResult class functionality."""
+    
+    def test_command_result_creation(self):
+        """Test CommandResult object creation."""
+        result = CommandResult("test output", "test error", 0)
+        assert result.stdout == "test output"
+        assert result.stderr == "test error"
+        assert result.exitCode == 0
+    
+    def test_command_result_string_representation(self):
+        """Test CommandResult string representation."""
+        result = CommandResult("line1\nline2", "error1\nerror2", 0)
+        repr_str = repr(result)
+        assert "exitCode=0" in repr_str
+        assert "stdout_lines=2" in repr_str
+        assert "stderr_lines=2" in repr_str
+    
+    def test_command_result_string_representation_empty(self):
+        """Test CommandResult string representation with empty outputs."""
+        result = CommandResult("", "", 1)
+        repr_str = repr(result)
+        assert "exitCode=1" in repr_str
+        assert "stdout_lines=0" in repr_str
+        assert "stderr_lines=0" in repr_str
+    
+    def test_html_escaping(self):
+        """Test HTML escaping functionality."""
+        result = CommandResult("<script>alert('xss')</script>", "error & <test>", 0)
+        html = result._repr_html_()
+        
+        # Check that HTML characters are properly escaped
+        assert "&lt;script&gt;" in html
+        assert "&amp;" in html
+        assert "&quot;" in html or "&#x27;" in html
+        assert "&gt;" in html
+    
+    def test_html_representation_success(self):
+        """Test HTML representation for successful command."""
+        result = CommandResult("Hello World\nLine 2", "", 0)
+        html = result._repr_html_()
+        
+        # Check for success indicators
+        assert "✅ Success" in html
+        assert "color: green" in html
+        assert "Hello World" in html
+        assert "Standard Output (2 lines)" in html
+        assert "Standard Error (0 lines)" in html
+        assert "Exit Code: <span style=\"color: green" in html
+    
+    def test_html_representation_failure(self):
+        """Test HTML representation for failed command."""
+        result = CommandResult("Some output", "Error message\nMore error", 1)
+        html = result._repr_html_()
+        
+        # Check for failure indicators
+        assert "❌ Failed (exit code: 1)" in html
+        assert "color: red" in html
+        assert "Some output" in html
+        assert "Error message" in html
+        assert "Standard Output (1 lines)" in html
+        assert "Standard Error (2 lines)" in html
+        assert "Exit Code: <span style=\"color: red" in html
+    
+    def test_html_representation_structure(self):
+        """Test HTML representation structure and elements."""
+        result = CommandResult("test", "error", 0)
+        html = result._repr_html_()
+        
+        # Check for required HTML elements
+        assert "<div style=" in html
+        assert "<details" in html
+        assert "<summary" in html
+        assert "<pre" in html
+        assert "📤 Standard Output" in html
+        assert "📥 Standard Error" in html
+        assert "font-family: 'Monaco'" in html
+        assert "border-radius: 8px" in html
+    
+    def test_html_representation_empty_outputs(self):
+        """Test HTML representation with empty stdout and stderr."""
+        result = CommandResult("", "", 0)
+        html = result._repr_html_()
+        
+        # Should still show the structure but with 0 lines
+        assert "Standard Output (0 lines)" in html
+        assert "Standard Error (0 lines)" in html
+        assert "✅ Success" in html
+    
+    def test_html_representation_multiline_output(self):
+        """Test HTML representation with multiline output."""
+        multiline_stdout = "Line 1\nLine 2\nLine 3\nLine 4"
+        multiline_stderr = "Error 1\nError 2"
+        result = CommandResult(multiline_stdout, multiline_stderr, 1)
+        html = result._repr_html_()
+        
+        # Check line counts
+        assert "Standard Output (4 lines)" in html
+        assert "Standard Error (2 lines)" in html
+        
+        # Check that content is preserved
+        assert "Line 1" in html
+        assert "Line 4" in html
+        assert "Error 1" in html
+        assert "Error 2" in html
