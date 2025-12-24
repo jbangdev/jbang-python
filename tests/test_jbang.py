@@ -1,10 +1,48 @@
 import sys
 
+from pathlib import Path 
 import pytest
 
 import jbang
 from jbang.jbang import CommandResult
 
+@pytest.fixture
+def java_hello(tmp_path: Path):
+    code = """
+    public class HelloWorld {
+        public static void main(String[] args) {
+            System.out.print("Hello, world!");
+        }
+    }    
+    """
+
+    file_path = tmp_path / "HelloWorld.java"
+    file_path.write_text(code.strip())
+    return file_path
+
+@pytest.fixture
+def streamable_java_hello(tmp_path: Path):
+    code = """
+    import java.io.*;
+    import java.util.Random;
+
+    public class HelloStreamable {
+        static final BufferedWriter out = new BufferedWriter(new OutputStreamWriter(System.out), 1 << 20);
+        public static void main(String[] args) throws Exception {
+            String message = \"Hello, world!\";
+            Random rand = new Random();
+            for (int i = 0; i < message.length(); i++){
+                out.write(message.charAt(i));
+                out.newLine();
+                out.flush();
+                Thread.sleep(rand.nextInt(3));
+            }
+        }
+    }
+    """
+    file_path = tmp_path / "HelloStreamable.java"
+    file_path.write_text(code.strip())
+    return file_path
 
 def test_version_command():
     """Test version command."""
