@@ -199,6 +199,27 @@ def spawnSync(args: Union[str, List[str]]) -> Any:
             2
         )
 
+def popen(args: Union[str, List[str]]) -> subprocess.Popen:
+    """Returns a reference to subprocess.Popen for streaming stdout."""
+    log.debug(f"trying to execute popen command: {args}")
+
+    cmdLine = _getCommandLine(args)
+
+    if not cmdLine:
+        print("Could not locate a way to run jbang. Try installing jbang manually and try again.")
+        raise Exception("Could not locate a way to run jbang. Try installing jbang manually and try again.", 2)
+    
+    return subprocess.Popen(
+        cmdLine,
+        shell=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        universal_newlines=True,
+    )
+
 def main():
     """Command-line entry point for jbang-python."""
     log.debug("Starting jbang-python CLI")
