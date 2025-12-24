@@ -98,6 +98,23 @@ def test_invalid_java_version():
     out = jbang.exec('--java invalid properties@jbangdev java.version')
     assert 'Invalid version' in out.stderr
 
+def test_popen_single_write(java_hello):
+    process = jbang.popen(str(java_hello))
+    process.wait()
+
+    assert process.returncode == 0
+    assert process.stdout.readlines()[0] == "Hello, world!"
+
+def test_popen_streamable_java_hello(streamable_java_hello):
+    process = jbang.popen(str(streamable_java_hello))
+    rows = []
+    message = "Hello, world!"
+    for i, line in enumerate(process.stdout):
+        assert line.rstrip("\n") == message[i]
+
+    return_code = process.wait()
+    assert return_code == 0
+
 @pytest.mark.skipif(sys.platform == 'win32', reason="Quote tests behave differently on Windows")
 class TestQuoting:
     def test_quote_empty_string(self):
