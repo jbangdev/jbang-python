@@ -1,10 +1,48 @@
 import sys
 
+from pathlib import Path 
 import pytest
 
 import jbang
 from jbang.jbang import CommandResult
 
+@pytest.fixture
+def java_hello(tmp_path: Path):
+    code = """
+    public class HelloWorld {
+        public static void main(String[] args) {
+            System.out.print("Hello, world!");
+        }
+    }    
+    """
+
+    file_path = tmp_path / "HelloWorld.java"
+    file_path.write_text(code.strip())
+    return file_path
+
+@pytest.fixture
+def streamable_java_hello(tmp_path: Path):
+    code = """
+    import java.io.*;
+    import java.util.Random;
+
+    public class HelloStreamable {
+        static final BufferedWriter out = new BufferedWriter(new OutputStreamWriter(System.out), 1 << 20);
+        public static void main(String[] args) throws Exception {
+            String message = \"Hello, world!\";
+            Random rand = new Random();
+            for (int i = 0; i < message.length(); i++){
+                out.write(message.charAt(i));
+                out.newLine();
+                out.flush();
+                Thread.sleep(rand.nextInt(3));
+            }
+        }
+    }
+    """
+    file_path = tmp_path / "HelloStreamable.java"
+    file_path.write_text(code.strip())
+    return file_path
 
 def test_version_command():
     """Test version command."""
@@ -59,6 +97,23 @@ def test_invalid_java_version():
     print("\nTesting invalid Java version handling...")
     out = jbang.exec('--java invalid properties@jbangdev java.version')
     assert 'Invalid version' in out.stderr
+
+def test_popen_single_write(java_hello):
+    process = jbang.popen(str(java_hello))
+    process.wait()
+
+    assert process.returncode == 0
+    assert process.stdout.readlines()[0] == "Hello, world!"
+
+def test_popen_streamable_java_hello(streamable_java_hello):
+    process = jbang.popen(str(streamable_java_hello))
+    rows = []
+    message = "Hello, world!"
+    for i, line in enumerate(process.stdout):
+        assert line.rstrip("\n") == message[i]
+
+    return_code = process.wait()
+    assert return_code == 0
 
 @pytest.mark.skipif(sys.platform == 'win32', reason="Quote tests behave differently on Windows")
 class TestQuoting:
