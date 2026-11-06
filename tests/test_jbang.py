@@ -62,7 +62,7 @@ def test_invalid_java_version():
     """Test invalid Java version handling."""
     print("\nTesting invalid Java version handling...")
     out = jbang.exec('--java invalid properties@jbangdev java.version')
-    assert 'Invalid version' in out.stderr
+    assert 'Invalid value for' in out.stderr and '--java' in out.stderr
 
 @pytest.mark.skipif(sys.platform == 'win32', reason="Quote tests behave differently on Windows")
 class TestQuoting:
@@ -364,3 +364,4 @@ def _decode_process_output(data):
     if len(data) >= 4 and data[1] == 0 and data[3] == 0:
         return data.decode("utf-16-le")
     return data.decode("utf-8")
+
