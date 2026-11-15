@@ -1,8 +1,12 @@
+import base64
+import shutil
+import subprocess
 import sys
 
 import pytest
 
 import jbang
+import jbang.jbang as jbang_impl
 from jbang.jbang import CommandResult
 
 
@@ -58,7 +62,7 @@ def test_invalid_java_version():
     """Test invalid Java version handling."""
     print("\nTesting invalid Java version handling...")
     out = jbang.exec('--java invalid properties@jbangdev java.version')
-    assert 'Invalid version' in out.stderr
+    assert 'Invalid value for' in out.stderr and '--java' in out.stderr
 
 @pytest.mark.skipif(sys.platform == 'win32', reason="Quote tests behave differently on Windows")
 class TestQuoting:
@@ -199,3 +203,165 @@ class TestCommandResult:
         assert "Line 4" in html
         assert "Error 1" in html
         assert "Error 2" in html
+
+
+def _only_powershell(cmd):
+    """Pretend the machine can run jbang only via the PowerShell bootstrap."""
+    if cmd == "powershell":
+        return "powershell"
+    return None
+
+
+def _decode_powershell_script(command):
+    prefix = "powershell -NoProfile -EncodedCommand "
+    assert command.startswith(prefix), command
+    encoded = command[len(prefix):]
+    # The payload is what cmd.exe will see. It must not contain characters
+    # cmd.exe would expand or treat as syntax.
+    assert not any(ch in encoded for ch in '&|<>^%!\r\n"\'' )
+    return base64.b64decode(encoded).decode("utf-16-le")
+
+
+def test_powershell_skip_install_expands_argument_line(monkeypatch):
+    """The no-install PowerShell command must receive the real arguments.
+
+    A single-quoted command string used to contain the literal text
+    ``$argLine``. PowerShell expanded that empty variable, so jbang was
+    launched with no arguments.
+    """
+    monkeypatch.setattr(jbang_impl.shutil, "which", _only_powershell)
+
+    command = jbang_impl._getCommandLine(
+        ["hello world", "it's", "cost=$5", 'say "hi"', "a`b", "$argLine", ""]
+    )
+    script = _decode_powershell_script(command)
+
+    assert script == (
+        'iex "& { $(iwr -useb https://ps.jbang.dev) } '
+        "'hello world' 'it''s' 'cost=`$5' 'say `\"hi`\"' 'a``b' '`$argLine' ''\""
+    )
+
+
+def test_powershell_skip_install_embeds_string_arguments_as_given(monkeypatch):
+    """A preformatted argument string is expanded as text, not re-quoted."""
+    monkeypatch.setattr(jbang_impl.shutil, "which", _only_powershell)
+
+    script = _decode_powershell_script(
+        jbang_impl._getCommandLine('properties@jbangdev extra')
+    )
+    assert script == (
+        'iex "& { $(iwr -useb https://ps.jbang.dev) } properties@jbangdev extra"'
+    )
+
+
+def test_existing_jbang_skips_powershell_bootstrap(monkeypatch):
+    """An installed jbang is still invoked directly, with its own quoting."""
+    def which(cmd):
+        if cmd == "jbang":
+            return "/usr/bin/jbang"
+        return None
+
+    monkeypatch.setattr(jbang_impl.shutil, "which", which)
+    command = jbang_impl._getCommandLine(["hello world"])
+    assert command.startswith("jbang ")
+    assert "powershell" not in command
+    assert "hello" in command and "world" in command
+
+
+def test_curl_bash_preferred_over_powershell(monkeypatch):
+    """curl|bash stays ahead of the PowerShell fallback when both exist."""
+    def which(cmd):
+        if cmd in ("curl", "bash", "powershell"):
+            return cmd
+        return None
+
+    monkeypatch.setattr(jbang_impl.shutil, "which", which)
+    command = jbang_impl._getCommandLine(["--version"])
+    assert command == "curl -Ls https://sh.jbang.dev | bash -s - --version"
+
+
+def test_exec_runs_expanded_powershell_command(monkeypatch):
+    """exec() must pass the expanded PowerShell command to the shell."""
+    monkeypatch.setattr(jbang_impl.shutil, "which", _only_powershell)
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["shell"] = kwargs.get("shell")
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(jbang_impl.subprocess, "run", fake_run)
+
+    result = jbang.exec(["-Dx=funky list", "properties@jbangdev"])
+
+    assert result.exitCode == 0
+    assert result.stdout == "ok"
+    assert captured["shell"] is True
+    script = _decode_powershell_script(captured["cmd"])
+    assert "'-Dx=funky list'" in script
+    assert "'properties@jbangdev'" in script
+    assert "$argLine" not in script
+
+
+def _powershell_executable():
+    return shutil.which("powershell") or shutil.which("pwsh")
+
+
+@pytest.mark.skipif(
+    _powershell_executable() is None,
+    reason="PowerShell is not installed",
+)
+def test_powershell_skip_install_arguments_round_trip(monkeypatch):
+    """Arguments with spaces and special characters survive PowerShell parsing."""
+    powershell = _powershell_executable()
+    monkeypatch.setattr(jbang_impl.shutil, "which", _only_powershell)
+    arguments = [
+        "hello world",
+        "it's",
+        "cost=$5",
+        'say "hi"',
+        "a`b",
+        "$argLine",
+        "",
+        "café",
+        "a&b|c<d>e^f%g!h(i)j",
+        "semi;colon",
+        "hash#tag",
+    ]
+    script = _decode_powershell_script(jbang_impl._getCommandLine(arguments))
+    # Run the same iex string the bootstrap runs, but echo the arguments
+    # instead of downloading jbang.
+    stub = (
+        "`$args | ForEach-Object { "
+        "'ARG:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]`$_)) "
+        "}"
+    )
+    assert "$(iwr -useb https://ps.jbang.dev)" in script
+    script = script.replace("$(iwr -useb https://ps.jbang.dev)", stub)
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+
+    completed = subprocess.run(
+        [powershell, "-NoProfile", "-EncodedCommand", encoded],
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, _decode_process_output(completed.stderr)
+    stdout = _decode_process_output(completed.stdout)
+    received = []
+    for line in stdout.splitlines():
+        assert line.startswith("ARG:"), stdout
+        received.append(base64.b64decode(line[4:]).decode("utf-8"))
+    assert received == arguments
+
+
+def _decode_process_output(data):
+    """Decode PowerShell stdout.
+
+    Windows PowerShell 5.1 writes UTF-16LE to a pipe. PowerShell 7 writes UTF-8.
+    """
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        return data.decode("utf-16")
+    if len(data) >= 4 and data[1] == 0 and data[3] == 0:
+        return data.decode("utf-16-le")
+    return data.decode("utf-8")
+

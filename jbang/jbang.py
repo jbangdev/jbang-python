@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import platform
@@ -100,7 +101,50 @@ def quote(xs):
     if platform.system() == 'Windows':
         return ' '.join(escapeCmdArgument(s) for s in xs)
     return ' '.join(escapeBashArgument(s) for s in xs)
-    
+
+
+def _escapePowerShellDoubleQuoted(value: str) -> str:
+    """Escape text embedded in a PowerShell double-quoted string.
+
+    Backticks are escaped first so the escapes added for ``$`` and ``"``
+    are not themselves escaped.
+    """
+    return (
+        value.replace('`', '``')
+        .replace('$', '`$')
+        .replace('"', '`"')
+    )
+
+
+def _quotePowerShellArgument(arg: str) -> str:
+    """Quote one argument for the no-install PowerShell command.
+
+    The argument is parsed twice: first while PowerShell evaluates the
+    double-quoted string passed to ``iex``, then again when ``iex`` parses
+    the result. A single-quoted literal keeps spaces and special characters
+    together for the second parse; backtick escapes keep ``$``, `` ` `` and
+    ``"`` literal during the first parse.
+    """
+    literal = "'" + arg.replace("'", "''") + "'"
+    return _escapePowerShellDoubleQuoted(literal)
+
+
+def _powershellNoInstallCommand(argLine: str) -> str:
+    """Build the Windows no-install command with ``argLine`` expanded.
+
+    ``-EncodedCommand`` carries the script as UTF-16LE base64 so cmd.exe
+    (``shell=True``) and powershell.exe cannot strip or reinterpret the
+    quotes around the arguments.
+    """
+    script = (
+        'iex "& { $(iwr -useb https://ps.jbang.dev) } '
+        + argLine
+        + '"'
+    )
+    log.debug("PowerShell no-install script: %s", script)
+    encoded = base64.b64encode(script.encode('utf-16-le')).decode('ascii')
+    return 'powershell -NoProfile -EncodedCommand ' + encoded
+
 
 def _getCommandLine(args: Union[str, List[str]]) -> Optional[str]:
     """Get the jbang command line with arguments, using no-install option if needed."""
@@ -136,7 +180,17 @@ def _getCommandLine(args: Union[str, List[str]]) -> Optional[str]:
         return " ".join(["curl -Ls https://sh.jbang.dev | bash -s -", argLine])
     elif shutil.which('powershell'):
         log.debug("running jbang using PowerShell")
-        return 'powershell -Command iex "& { $(iwr -useb https://ps.jbang.dev) } $argLine"'
+        # Expand argLine into the PowerShell script. A single-quoted command
+        # string leaves the literal "$argLine", which PowerShell treats as an
+        # empty variable, so the real arguments never reach jbang.
+        # List arguments are quoted for that script. A caller-supplied string
+        # is already a command-line fragment and is embedded as-is, same as
+        # the curl|bash path.
+        if isinstance(args, str):
+            psArgLine = argLine
+        else:
+            psArgLine = ' '.join(_quotePowerShellArgument(arg) for arg in args)
+        return _powershellNoInstallCommand(psArgLine)
     else:
         log.debug("no jbang installation found")
         return None
